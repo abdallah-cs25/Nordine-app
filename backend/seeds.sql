@@ -1,17 +1,20 @@
 -- My Word Marketplace - Seed Data
 -- Run this after schema.sql to populate initial data
 
+-- Clean existing data (CASCADE handles foreign keys)
+TRUNCATE TABLE deliveries, commissions, order_items, orders, products, stores, store_managers, categories, users RESTART IDENTITY CASCADE;
+
 -- Categories
-INSERT INTO categories (name, icon) VALUES
-('Gym & Clubs', 'fitness_center'),
-('Clothing & Fashion', 'checkroom'),
-('Perfumes & Scents', 'local_florist'),
-('Equipment', 'build'),
-('Food & Restaurants', 'restaurant'),
-('Grocery', 'shopping_basket'),
-('Electronics', 'devices'),
-('Health & Beauty', 'spa'),
-('Home & Garden', 'home')
+INSERT INTO categories (name_ar, name_en, name_fr, image_url) VALUES
+('صالات رياضية', 'Gym & Clubs', 'Salle de sport', NULL),
+('ملابس وأزياء', 'Clothing & Fashion', 'Vêtements & Mode', NULL),
+('عطور', 'Perfumes & Scents', 'Parfums', NULL),
+('معدات', 'Equipment', 'Équipement', NULL),
+('مطاعم', 'Food & Restaurants', 'Restaurants', NULL),
+('بقالة', 'Grocery', 'Épicerie', NULL),
+('إلكترونيات', 'Electronics', 'Électronique', NULL),
+('صحة وجمال', 'Health & Beauty', 'Santé & Beauté', NULL),
+('منزل وحديقة', 'Home & Garden', 'Maison & Jardin', NULL)
 ON CONFLICT DO NOTHING;
 
 -- Demo Users (passwords are hashed version of 'password123')
