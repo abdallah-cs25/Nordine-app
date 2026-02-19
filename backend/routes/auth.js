@@ -55,8 +55,17 @@ router.post('/login', async (req, res) => {
         // Generate JWT
         const token = jwt.sign({ id: user.id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '7d' });
 
+        let store = null;
+        if (user.role === 'SELLER') {
+            const storeResult = await db.query('SELECT * FROM stores WHERE owner_id = $1', [user.id]);
+            if (storeResult.rows.length > 0) {
+                store = storeResult.rows[0];
+            }
+        }
+
         res.json({
             user: { id: user.id, name: user.name, email: user.email, role: user.role },
+            store, // Return store info if available (id, name, etc.)
             token
         });
     } catch (error) {

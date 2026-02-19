@@ -1,52 +1,104 @@
 'use client';
 
 import AdminLayout from '@/components/AdminLayout';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { api } from '@/utils/api';
 
 interface User {
     id: number;
     name: string;
     email: string;
-    phone: string;
+    phone_number: string;
     role: string;
-    status: string;
-    orders: number;
-    joined: string;
+    is_active: boolean;
+    created_at: string;
+    commission_rate?: number;
 }
 
-const mockUsers: User[] = [
-    { id: 1, name: 'Ahmed Admin', email: 'admin@myword.dz', phone: '+213555000001', role: 'ADMIN', status: 'Active', orders: 0, joined: '2026-01-01' },
-    { id: 2, name: 'Karim Store', email: 'karim@store.dz', phone: '+213555000002', role: 'SELLER', status: 'Active', orders: 89, joined: '2026-01-05' },
-    { id: 3, name: 'Fatima User', email: 'fatima@user.dz', phone: '+213555000003', role: 'CUSTOMER', status: 'Active', orders: 12, joined: '2026-01-10' },
-    { id: 4, name: 'Omar Driver', email: 'omar@driver.dz', phone: '+213555000004', role: 'DRIVER', status: 'Active', orders: 156, joined: '2026-01-08' },
-    { id: 5, name: 'Sara Customer', email: 'sara@user.dz', phone: '+213555000005', role: 'CUSTOMER', status: 'Suspended', orders: 5, joined: '2026-01-15' },
-];
-
 export default function UsersPage() {
-    const [users] = useState<User[]>(mockUsers);
+    const [users, setUsers] = useState<User[]>([]);
     const [roleFilter, setRoleFilter] = useState('');
+    const [loading, setLoading] = useState(true);
+    const [showModal, setShowModal] = useState(false);
 
-    const getRoleColor = (role: string) => {
-        switch (role) {
-            case 'ADMIN': return 'bg-purple-100 text-purple-700';
-            case 'SELLER': return 'bg-blue-100 text-blue-700';
-            case 'DRIVER': return 'bg-orange-100 text-orange-700';
-            default: return 'bg-gray-100 text-gray-700';
+    // New User State
+    const [newUser, setNewUser] = useState({
+        name: '',
+        email: '',
+        password: '',
+        phone_number: '',
+        role: 'CUSTOMER',
+        commission_rate: 10
+    });
+
+    useEffect(() => {
+        fetchUsers();
+    }, [roleFilter]); // Refetch when filter changes or just filter locally? API supports filter.
+
+    const fetchUsers = async () => {
+        try {
+            setLoading(true);
+            let url = '/users?limit=100';
+            if (roleFilter) url += `&role=${roleFilter}`;
+
+            const data = await api.get(url);
+            setUsers(data);
+        } catch (error) {
+            console.error('Failed to fetch users', error);
+        } finally {
+            setLoading(false);
         }
     };
 
-    const filteredUsers = roleFilter
-        ? users.filter(u => u.role === roleFilter)
-        : users;
+    const handleCreate = async () => {
+        try {
+            await api.post('/users', newUser);
+            setShowModal(false);
+            fetchUsers();
+            setNewUser({
+                name: '',
+                email: '',
+                password: '',
+                phone_number: '',
+                role: 'CUSTOMER',
+                commission_rate: 10
+            });
+        } catch (error) {
+            console.error('Failed to create user', error);
+            alert('Failed to create user');
+        }
+    };
+
+    const toggleStatus = async (user: User) => {
+        if (!confirm(`Are you sure you want to ${user.is_active ? 'suspend' : 'activate'} this user?`)) return;
+        try {
+            await api.put(`/users/${user.id}`, { is_active: !user.is_active });
+            fetchUsers();
+        } catch (error) {
+            console.error('Failed to update user status', error);
+        }
+    };
+
+    const getRoleColor = (role: string) => {
+        switch (role) {
+            case 'ADMIN': return 'badge-info';
+            case 'SELLER': return 'badge-primary';
+            case 'DRIVER': return 'badge-warning';
+            default: return 'badge-neutral';
+        }
+    };
 
     return (
         <AdminLayout>
             <div>
-                <div className="flex justify-between items-center mb-6">
-                    <h1 className="text-2xl font-bold">Users Management</h1>
-                    <div className="flex space-x-2">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+                    <div>
+                        <h1 className="text-2xl font-bold text-gray-900">Users Management</h1>
+                        <p className="text-sm text-gray-500 mt-1">Manage platform users and roles</p>
+                    </div>
+                    <div className="flex items-center space-x-2">
                         <select
-                            className="border rounded-lg px-4 py-2"
+                            className="form-input w-auto"
                             value={roleFilter}
                             onChange={(e) => setRoleFilter(e.target.value)}
                         >
@@ -56,76 +108,134 @@ export default function UsersPage() {
                             <option value="DRIVER">Drivers</option>
                             <option value="ADMIN">Admins</option>
                         </select>
-                        <input type="text" placeholder="Search..." className="border rounded-lg px-4 py-2" />
+                        <button
+                            onClick={() => setShowModal(true)}
+                            className="btn btn-primary"
+                        >
+                            + Create User
+                        </button>
                     </div>
                 </div>
 
-                {/* Stats */}
-                <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
-                    <div className="bg-white rounded-xl shadow p-4">
-                        <p className="text-gray-500 text-sm">Total Users</p>
-                        <p className="text-2xl font-bold">{users.length}</p>
-                    </div>
-                    <div className="bg-white rounded-xl shadow p-4">
-                        <p className="text-gray-500 text-sm">Customers</p>
-                        <p className="text-2xl font-bold text-blue-600">{users.filter(u => u.role === 'CUSTOMER').length}</p>
-                    </div>
-                    <div className="bg-white rounded-xl shadow p-4">
-                        <p className="text-gray-500 text-sm">Sellers</p>
-                        <p className="text-2xl font-bold text-green-600">{users.filter(u => u.role === 'SELLER').length}</p>
-                    </div>
-                    <div className="bg-white rounded-xl shadow p-4">
-                        <p className="text-gray-500 text-sm">Drivers</p>
-                        <p className="text-2xl font-bold text-orange-600">{users.filter(u => u.role === 'DRIVER').length}</p>
-                    </div>
-                    <div className="bg-white rounded-xl shadow p-4">
-                        <p className="text-gray-500 text-sm">Admins</p>
-                        <p className="text-2xl font-bold text-purple-600">{users.filter(u => u.role === 'ADMIN').length}</p>
-                    </div>
-                </div>
-
-                <div className="bg-white rounded-xl shadow overflow-hidden">
-                    <table className="w-full">
-                        <thead className="bg-gray-50">
-                            <tr>
-                                <th className="text-left p-4">User</th>
-                                <th className="text-left p-4">Email</th>
-                                <th className="text-left p-4">Phone</th>
-                                <th className="text-left p-4">Role</th>
-                                <th className="text-left p-4">Status</th>
-                                <th className="text-left p-4">Joined</th>
-                                <th className="text-left p-4">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {filteredUsers.map((user) => (
-                                <tr key={user.id} className="border-b hover:bg-gray-50">
-                                    <td className="p-4 font-medium">{user.name}</td>
-                                    <td className="p-4">{user.email}</td>
-                                    <td className="p-4">{user.phone}</td>
-                                    <td className="p-4">
-                                        <span className={`px-2 py-1 rounded text-sm ${getRoleColor(user.role)}`}>
-                                            {user.role}
-                                        </span>
-                                    </td>
-                                    <td className="p-4">
-                                        <span className={`px-2 py-1 rounded text-sm ${user.status === 'Active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                                            }`}>
-                                            {user.status}
-                                        </span>
-                                    </td>
-                                    <td className="p-4">{user.joined}</td>
-                                    <td className="p-4">
-                                        <button className="text-blue-500 hover:underline mr-2">Edit</button>
-                                        <button className="text-red-500 hover:underline">
-                                            {user.status === 'Active' ? 'Suspend' : 'Activate'}
-                                        </button>
-                                    </td>
+                {loading ? (
+                    <div className="card p-6"><div className="space-y-3">{[1, 2, 3, 4].map(i => <div key={i} className="skeleton h-12 w-full" />)}</div></div>
+                ) : (
+                    <div className="table-container card">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>User</th>
+                                    <th>Email</th>
+                                    <th>Phone</th>
+                                    <th>Role</th>
+                                    <th>Status</th>
+                                    <th>Joined</th>
+                                    <th>Actions</th>
                                 </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
+                            </thead>
+                            <tbody>
+                                {users.map((user) => (
+                                    <tr key={user.id}>
+                                        <td className="font-medium text-gray-900">{user.name}</td>
+                                        <td>{user.email}</td>
+                                        <td>{user.phone_number}</td>
+                                        <td>
+                                            <span className={`badge ${getRoleColor(user.role)}`}>
+                                                {user.role}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <span className={`badge ${user.is_active ? 'badge-success' : 'badge-danger'}`}>
+                                                {user.is_active ? 'Active' : 'Suspended'}
+                                            </span>
+                                        </td>
+                                        <td className="text-gray-500">
+                                            {new Date(user.created_at).toLocaleDateString()}
+                                        </td>
+                                        <td>
+                                            <div className="flex items-center space-x-2">
+                                                <button className="text-sm text-teal-600 hover:text-teal-800 font-medium">Edit</button>
+                                                <button
+                                                    onClick={() => toggleStatus(user)}
+                                                    className={`text-sm font-medium ${user.is_active ? 'text-red-600 hover:text-red-800' : 'text-green-600 hover:text-green-800'}`}
+                                                >
+                                                    {user.is_active ? 'Suspend' : 'Activate'}
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                                {users.length === 0 && (
+                                    <tr>
+                                        <td colSpan={7} className="empty-state">👥 No users found.</td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+
+                {/* Create Modal */}
+                {showModal && (
+                    <div className="modal-overlay">
+                        <div className="modal-content">
+                            <h2 className="text-xl font-bold text-gray-900 mb-4">Create New User</h2>
+                            <div className="space-y-4">
+                                <input
+                                    type="text"
+                                    placeholder="Full Name"
+                                    className="form-input"
+                                    value={newUser.name}
+                                    onChange={e => setNewUser({ ...newUser, name: e.target.value })}
+                                />
+                                <input
+                                    type="email"
+                                    placeholder="Email"
+                                    className="form-input"
+                                    value={newUser.email}
+                                    onChange={e => setNewUser({ ...newUser, email: e.target.value })}
+                                />
+                                <input
+                                    type="password"
+                                    placeholder="Password"
+                                    className="form-input"
+                                    value={newUser.password}
+                                    onChange={e => setNewUser({ ...newUser, password: e.target.value })}
+                                />
+                                <input
+                                    type="text"
+                                    placeholder="Phone Number"
+                                    className="form-input"
+                                    value={newUser.phone_number}
+                                    onChange={e => setNewUser({ ...newUser, phone_number: e.target.value })}
+                                />
+                                <select
+                                    className="form-input"
+                                    value={newUser.role}
+                                    onChange={e => setNewUser({ ...newUser, role: e.target.value })}
+                                >
+                                    <option value="CUSTOMER">Customer</option>
+                                    <option value="SELLER">Seller</option>
+                                    <option value="DRIVER">Driver</option>
+                                    <option value="ADMIN">Admin</option>
+                                </select>
+                                {(newUser.role === 'SELLER' || newUser.role === 'DRIVER') && (
+                                    <input
+                                        type="number"
+                                        placeholder="Commission Rate (%)"
+                                        className="form-input"
+                                        value={newUser.commission_rate}
+                                        onChange={e => setNewUser({ ...newUser, commission_rate: parseFloat(e.target.value) })}
+                                    />
+                                )}
+                            </div>
+                            <div className="flex justify-end space-x-2 mt-6">
+                                <button onClick={() => setShowModal(false)} className="btn btn-outline">Cancel</button>
+                                <button onClick={handleCreate} className="btn btn-primary">Create</button>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         </AdminLayout>
     );

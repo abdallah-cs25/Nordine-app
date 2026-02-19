@@ -1,133 +1,120 @@
 'use client';
 
+import React, { useEffect, useState } from 'react';
 import AdminLayout from '@/components/AdminLayout';
+import { api } from '@/utils/api';
+import Link from 'next/link';
 
 export default function AdminDashboard() {
+    const [stats, setStats] = useState<any>(null);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchStats = async () => {
+            try {
+                const data = await api.get('/analytics/dashboard?period=month');
+                setStats(data);
+            } catch (err) {
+                console.error('Failed to load admin stats', err);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchStats();
+    }, []);
+
+    const statCards = [
+        { label: 'Total Orders', value: stats?.orders?.total || 0, sub: 'All time', icon: '🛒', color: 'primary' },
+        { label: 'Total Revenue', value: `${(stats?.orders?.revenue || 0).toLocaleString()} DZD`, sub: 'Gross Sales', icon: '💰', color: 'success' },
+        { label: 'Active Stores', value: stats?.stores?.active || 0, sub: 'Platform Wide', icon: '🏪', color: 'accent' },
+        { label: 'Active Drivers', value: stats?.drivers?.active || 0, sub: 'On Duty', icon: '🚗', color: 'warning' },
+    ];
+
     return (
         <AdminLayout>
             <div>
-                <h1 className="text-2xl font-bold mb-6">Dashboard Overview</h1>
+                <div className="mb-6">
+                    <h1 className="text-2xl font-bold text-gray-900">Dashboard Overview</h1>
+                    <p className="text-gray-500 text-sm mt-1">Welcome back — here's what's happening today</p>
+                </div>
 
-                {/* Stats Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                    <div className="bg-white rounded-xl shadow p-6">
-                        <div className="flex justify-between items-start">
-                            <div>
-                                <p className="text-gray-500 text-sm">Total Orders</p>
-                                <p className="text-3xl font-bold">1,234</p>
-                                <p className="text-green-500 text-sm">+12% from last month</p>
+                {/* Stats Grid */}
+                {loading ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                        {[1, 2, 3, 4].map(i => (
+                            <div key={i} className="card p-6">
+                                <div className="skeleton h-3 w-24 mb-3" />
+                                <div className="skeleton h-8 w-20 mb-2" />
+                                <div className="skeleton h-3 w-16" />
                             </div>
-                            <span className="text-3xl">🛒</span>
-                        </div>
+                        ))}
                     </div>
-
-                    <div className="bg-white rounded-xl shadow p-6">
-                        <div className="flex justify-between items-start">
-                            <div>
-                                <p className="text-gray-500 text-sm">Total Revenue</p>
-                                <p className="text-3xl font-bold">450,000 DZD</p>
-                                <p className="text-green-500 text-sm">+8% from last month</p>
+                ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                        {statCards.map((card, i) => (
+                            <div key={i} className={`card stat-card ${card.color} p-6`} style={{ animationDelay: `${i * 80}ms` }}>
+                                <div className="flex justify-between items-start">
+                                    <div>
+                                        <p className="text-gray-500 text-xs font-medium uppercase tracking-wide">{card.label}</p>
+                                        <p className="text-2xl font-bold text-gray-900 mt-1">{card.value}</p>
+                                        <p className="text-xs text-gray-400 mt-1">{card.sub}</p>
+                                    </div>
+                                    <span className="text-2xl opacity-80">{card.icon}</span>
+                                </div>
                             </div>
-                            <span className="text-3xl">💰</span>
-                        </div>
+                        ))}
                     </div>
+                )}
 
-                    <div className="bg-white rounded-xl shadow p-6">
-                        <div className="flex justify-between items-start">
-                            <div>
-                                <p className="text-gray-500 text-sm">Active Stores</p>
-                                <p className="text-3xl font-bold">56</p>
-                                <p className="text-blue-500 text-sm">3 pending approval</p>
-                            </div>
-                            <span className="text-3xl">🏪</span>
-                        </div>
+                {/* Recent Activity */}
+                <div className="card p-6 mb-6">
+                    <div className="flex justify-between items-center mb-4">
+                        <h2 className="text-lg font-semibold text-gray-900">Recent Activity</h2>
+                        <Link href="/admin/orders" className="text-sm font-medium text-teal-600 hover:text-teal-500 transition-colors">
+                            View All Orders →
+                        </Link>
                     </div>
-
-                    <div className="bg-white rounded-xl shadow p-6">
-                        <div className="flex justify-between items-start">
-                            <div>
-                                <p className="text-gray-500 text-sm">Active Drivers</p>
-                                <p className="text-3xl font-bold">28</p>
-                                <p className="text-green-500 text-sm">18 online now</p>
-                            </div>
-                            <span className="text-3xl">🚗</span>
-                        </div>
+                    <div className="empty-state py-6">
+                        <p className="text-sm">
+                            Check the <Link href="/admin/orders" className="text-teal-600 font-medium hover:underline">Orders</Link> page for latest activity.
+                        </p>
                     </div>
                 </div>
 
-                {/* Recent Orders */}
-                <div className="bg-white rounded-xl shadow p-6 mb-8">
-                    <h2 className="text-xl font-semibold mb-4">Recent Orders</h2>
-                    <table className="w-full">
-                        <thead className="bg-gray-50">
-                            <tr>
-                                <th className="text-left p-3">Order ID</th>
-                                <th className="text-left p-3">Customer</th>
-                                <th className="text-left p-3">Store</th>
-                                <th className="text-left p-3">Amount</th>
-                                <th className="text-left p-3">Status</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr className="border-b">
-                                <td className="p-3">#1234</td>
-                                <td className="p-3">Ahmed M.</td>
-                                <td className="p-3">Gym Power</td>
-                                <td className="p-3">2,500 DZD</td>
-                                <td className="p-3"><span className="bg-green-100 text-green-700 px-2 py-1 rounded">Delivered</span></td>
-                            </tr>
-                            <tr className="border-b">
-                                <td className="p-3">#1235</td>
-                                <td className="p-3">Fatima B.</td>
-                                <td className="p-3">Fashion Hub</td>
-                                <td className="p-3">8,000 DZD</td>
-                                <td className="p-3"><span className="bg-yellow-100 text-yellow-700 px-2 py-1 rounded">In Transit</span></td>
-                            </tr>
-                            <tr className="border-b">
-                                <td className="p-3">#1236</td>
-                                <td className="p-3">Omar K.</td>
-                                <td className="p-3">Tech World</td>
-                                <td className="p-3">15,000 DZD</td>
-                                <td className="p-3"><span className="bg-blue-100 text-blue-700 px-2 py-1 rounded">Preparing</span></td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-
-                {/* Commission Overview */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <div className="bg-white rounded-xl shadow p-6">
-                        <h2 className="text-xl font-semibold mb-4">Commission Summary</h2>
-                        <div className="space-y-4">
-                            <div className="flex justify-between items-center">
-                                <span>Today</span>
-                                <span className="font-bold text-teal-600">4,500 DZD</span>
-                            </div>
-                            <div className="flex justify-between items-center">
-                                <span>This Week</span>
-                                <span className="font-bold text-teal-600">28,000 DZD</span>
-                            </div>
-                            <div className="flex justify-between items-center">
-                                <span>This Month</span>
-                                <span className="font-bold text-teal-600">120,000 DZD</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="bg-white rounded-xl shadow p-6">
-                        <h2 className="text-xl font-semibold mb-4">Top Stores</h2>
+                {/* Bottom Grid */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    {/* Commission Summary */}
+                    <div className="card p-6">
+                        <h2 className="text-lg font-semibold text-gray-900 mb-4">Commission Summary</h2>
                         <div className="space-y-3">
-                            <div className="flex justify-between items-center">
-                                <span>Gym Power</span>
-                                <span className="font-bold">89 orders</span>
+                            {[
+                                { label: 'Total Generated', value: `${(stats?.commissions?.total || 0).toLocaleString()} DZD`, color: 'text-teal-600' },
+                                { label: 'Collected', value: `${(stats?.commissions?.collected || 0).toLocaleString()} DZD`, color: 'text-green-600' },
+                                { label: 'Pending Collection', value: `${(stats?.commissions?.pending || 0).toLocaleString()} DZD`, color: 'text-amber-600' },
+                            ].map((item, i) => (
+                                <div key={i} className="flex justify-between items-center py-2 border-b border-gray-50 last:border-0">
+                                    <span className="text-sm text-gray-600">{item.label}</span>
+                                    <span className={`text-sm font-semibold ${item.color}`}>{item.value}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Quick Stats */}
+                    <div className="card p-6">
+                        <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Stats</h2>
+                        <div className="space-y-3">
+                            <div className="flex justify-between items-center py-2 border-b border-gray-50">
+                                <span className="text-sm text-gray-600">New Users (This Month)</span>
+                                <span className="text-sm font-semibold text-gray-900">{stats?.users?.new || 0}</span>
                             </div>
-                            <div className="flex justify-between items-center">
-                                <span>Fashion Hub</span>
-                                <span className="font-bold">76 orders</span>
+                            <div className="flex justify-between items-center py-2 border-b border-gray-50">
+                                <span className="text-sm text-gray-600">Total Products</span>
+                                <span className="text-sm font-semibold text-gray-900">{stats?.products?.total || 0}</span>
                             </div>
-                            <div className="flex justify-between items-center">
-                                <span>Tech World</span>
-                                <span className="font-bold">54 orders</span>
+                            <div className="flex justify-between items-center py-2">
+                                <span className="text-sm text-gray-600">Total Stores</span>
+                                <span className="text-sm font-semibold text-gray-900">{stats?.stores?.total || 0}</span>
                             </div>
                         </div>
                     </div>

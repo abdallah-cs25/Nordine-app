@@ -10,12 +10,15 @@ const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
 });
 
+const { authMiddleware, adminOnly } = require('./auth');
+// ... imports
+
 // Get all users (Admin only)
-router.get('/', async (req, res) => {
+router.get('/', authMiddleware, adminOnly, async (req, res) => {
     try {
         const { role, search, limit = 50, offset = 0 } = req.query;
 
-        let query = 'SELECT id, name, email, phone_number, role, is_active, created_at FROM users WHERE 1=1';
+        let query = 'SELECT id, name, email, phone_number, role, is_active, commission_rate, created_at FROM users WHERE 1=1';
         const params = [];
         let paramIndex = 1;
 
@@ -42,12 +45,40 @@ router.get('/', async (req, res) => {
     }
 });
 
+// Create user (Admin only)
+router.post('/', authMiddleware, adminOnly, async (req, res) => {
+    try {
+        const { name, email, password, phone_number, role, commission_rate } = req.body;
+
+        // Check if user exists
+        const existingUser = await db.query('SELECT * FROM users WHERE email = $1', [email]);
+        if (existingUser.rows.length > 0) {
+            return res.status(400).json({ error: 'Email already registered' });
+        }
+
+        // Hash password
+        const salt = await bcrypt.genSalt(10);
+        const password_hash = await bcrypt.hash(password, salt);
+
+        // Insert user
+        const result = await db.query(
+            'INSERT INTO users (name, email, password_hash, phone_number, role, commission_rate) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, name, email, role, commission_rate',
+            [name, email, password_hash, phone_number, role, commission_rate || (role === 'DRIVER' ? 10.00 : null)]
+        );
+
+        res.status(201).json(result.rows[0]);
+    } catch (error) {
+        console.error('Create user error:', error);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
 // Get user by ID
-router.get('/:id', async (req, res) => {
+router.get('/:id', authMiddleware, adminOnly, async (req, res) => {
     try {
         const { id } = req.params;
         const result = await db.query(
-            'SELECT id, name, email, phone_number, role, is_active, created_at FROM users WHERE id = $1',
+            'SELECT id, name, email, phone_number, role, is_active, commission_rate, created_at FROM users WHERE id = $1',
             [id]
         );
 
@@ -63,16 +94,16 @@ router.get('/:id', async (req, res) => {
 });
 
 // Update user
-router.put('/:id', async (req, res) => {
+router.put('/:id', authMiddleware, adminOnly, async (req, res) => {
     try {
         const { id } = req.params;
-        const { name, phone_number, role, is_active } = req.body;
+        const { name, phone_number, role, is_active, commission_rate } = req.body;
 
         const result = await db.query(
             `UPDATE users SET name = COALESCE($1, name), phone_number = COALESCE($2, phone_number), 
-       role = COALESCE($3, role), is_active = COALESCE($4, is_active)
-       WHERE id = $5 RETURNING id, name, email, phone_number, role, is_active`,
-            [name, phone_number, role, is_active, id]
+       role = COALESCE($3, role), is_active = COALESCE($4, is_active), commission_rate = COALESCE($5, commission_rate)
+       WHERE id = $6 RETURNING id, name, email, phone_number, role, is_active, commission_rate`,
+            [name, phone_number, role, is_active, commission_rate, id]
         );
 
         if (result.rows.length === 0) {

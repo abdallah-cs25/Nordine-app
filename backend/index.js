@@ -65,7 +65,17 @@ app.use('/api/analytics', authMiddleware, analyticsRoutes); // Admin only
 app.use('/api/reviews', reviewsRoutes); // Public read, auth write
 app.use('/api/favorites', authMiddleware, favoritesRoutes); // Protected
 app.use('/api/coupons', couponsRoutes); // Public validate, admin create
+app.use('/api/coupons', couponsRoutes); // Public validate, admin create
 app.use('/api/search', searchRoutes); // Public
+app.use('/api/upload', require('./routes/upload')); // Public upload
+app.use('/api/commissions', require('./routes/commissions')); // Admin/Seller
+app.use('/api/ads', require('./routes/ads')); // Public/Admin/Seller
+// app.use('/api/notifications', ...); // Already there on line 61
+
+// Serve static files
+const path = require('path');
+app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
+
 
 // Error handling middleware
 app.use((err, req, res, next) => {

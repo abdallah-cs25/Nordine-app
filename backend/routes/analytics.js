@@ -4,49 +4,83 @@ const db = require('../db');
 // Dashboard statistics
 router.get('/dashboard', async (req, res) => {
     try {
-        const { period = 'today' } = req.query;
+        const { period = 'today', startDate, endDate } = req.query;
 
         let dateFilter = "created_at >= CURRENT_DATE";
         if (period === 'week') dateFilter = "created_at >= CURRENT_DATE - INTERVAL '7 days'";
         if (period === 'month') dateFilter = "created_at >= CURRENT_DATE - INTERVAL '30 days'";
         if (period === 'year') dateFilter = "created_at >= CURRENT_DATE - INTERVAL '365 days'";
+        if (period === 'custom' && startDate && endDate) {
+            dateFilter = `created_at BETWEEN '${startDate}' AND '${endDate}'`;
+        }
 
         // Total orders and revenue
-        const ordersResult = await pool.query(`
-      SELECT COUNT(*) as total_orders, COALESCE(SUM(total_amount), 0) as total_revenue
-      FROM orders WHERE ${dateFilter}
-    `);
+        let ordersQuery = `SELECT COUNT(*) as total_orders, COALESCE(SUM(total_amount), 0) as total_revenue FROM orders WHERE ${dateFilter}`;
+        const queryParams = [];
+
+        if (req.user.role === 'SELLER') {
+            // Filter by stores owned by this seller
+            // We need to join with stores
+            ordersQuery = `
+                SELECT COUNT(o.id) as total_orders, COALESCE(SUM(o.total_amount), 0) as total_revenue
+                FROM orders o
+                JOIN stores s ON o.store_id = s.id
+                WHERE ${dateFilter} AND s.owner_id = $1
+            `;
+            queryParams.push(req.user.id);
+        }
+
+        const ordersResult = await db.query(ordersQuery, queryParams);
 
         // Orders by status
-        const statusResult = await pool.query(`
-      SELECT status, COUNT(*) as count
-      FROM orders WHERE ${dateFilter}
-      GROUP BY status
-    `);
+        let statusQuery = `SELECT status, COUNT(*) as count FROM orders WHERE ${dateFilter} GROUP BY status`;
+        if (req.user.role === 'SELLER') {
+            statusQuery = `
+                SELECT o.status, COUNT(o.id) as count
+                FROM orders o
+                JOIN stores s ON o.store_id = s.id
+                WHERE ${dateFilter} AND s.owner_id = $1
+                GROUP BY o.status
+             `;
+        }
+        const statusResult = await db.query(statusQuery, req.user.role === 'SELLER' ? [req.user.id] : []);
 
         // Active stores
-        const storesResult = await pool.query(`
-      SELECT COUNT(*) as active_stores FROM stores WHERE is_active = true
-    `);
+        let storesQuery = `SELECT COUNT(*) as active_stores FROM stores WHERE is_active = true`;
+        if (req.user.role === 'SELLER') {
+            storesQuery += ` AND owner_id = $1`;
+        }
+        const storesResult = await db.query(storesQuery, req.user.role === 'SELLER' ? [req.user.id] : []);
 
-        // Active drivers (those with deliveries)
-        const driversResult = await pool.query(`
+        // Active drivers (Global for now, or drivers delivering for this seller)
+        // For simplicity, sellers see total drivers or we can skip this metric for them
+        const driversResult = await db.query(`
       SELECT COUNT(DISTINCT driver_id) as active_drivers
       FROM deliveries WHERE ${dateFilter}
     `);
 
-        // New users
-        const usersResult = await pool.query(`
+        // New users (Global only)
+        const usersResult = await db.query(`
       SELECT COUNT(*) as new_users FROM users WHERE ${dateFilter}
     `);
 
         // Total commissions
-        const commissionsResult = await pool.query(`
-      SELECT COALESCE(SUM(amount), 0) as total_commission,
-             SUM(CASE WHEN is_collected THEN amount ELSE 0 END) as collected,
-             SUM(CASE WHEN NOT is_collected THEN amount ELSE 0 END) as pending
-      FROM commissions c WHERE ${dateFilter.replace('created_at', 'c.created_at')}
-    `);
+        let commissionsQuery = `
+            SELECT COALESCE(SUM(amount), 0) as total_commission,
+                SUM(CASE WHEN is_collected THEN amount ELSE 0 END) as collected,
+                SUM(CASE WHEN NOT is_collected THEN amount ELSE 0 END) as pending
+            FROM commissions c 
+            JOIN stores s ON c.store_id = s.id 
+            WHERE ${dateFilter.replace('created_at', 'c.created_at')}
+        `;
+        const commParams = []; // Renamed from params to avoid conflict if any
+
+        if (req.user.role === 'SELLER') {
+            commissionsQuery += ` AND s.owner_id = $1`;
+            commParams.push(req.user.id);
+        }
+
+        const commissionsResult = await db.query(commissionsQuery, commParams);
 
         res.json({
             orders: {

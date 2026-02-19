@@ -1,5 +1,7 @@
 const db = require('../db');
 
+const { authMiddleware, sellerOrAdmin } = require('./auth');
+
 // Get all stores (with optional location filter)
 router.get('/', async (req, res) => {
     try {
@@ -51,24 +53,59 @@ router.get('/:id', async (req, res) => {
 });
 
 // Create new store (requires auth and SELLER/ADMIN role)
-router.post('/', async (req, res) => {
+router.post('/', authMiddleware, sellerOrAdmin, async (req, res) => {
     try {
-        const { name, description, location_lat, location_lng, address, image_url } = req.body;
-        const owner_id = req.user?.id;
-
-        if (!owner_id) {
-            return res.status(401).json({ error: 'Authentication required' });
-        }
+        const { name, description, location_lat, location_lng, address, image_url, commission_rate } = req.body;
+        // If admin, they can specify an owner_id, otherwise default to themselves
+        const owner_id = (req.user.role === 'ADMIN' && req.body.owner_id) ? req.body.owner_id : req.user.id;
 
         const result = await db.query(
-            `INSERT INTO stores (owner_id, name, description, location_lat, location_lng, address, image_url) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-            [owner_id, name, description, location_lat, location_lng, address, image_url]
+            `INSERT INTO stores (owner_id, name, description, location_lat, location_lng, address, image_url, commission_rate) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+            [owner_id, name, description, location_lat, location_lng, address, image_url, commission_rate || 10.00]
         );
 
         res.status(201).json(result.rows[0]);
     } catch (error) {
         console.error('Create store error:', error);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// Update store (update info or toggle active status)
+router.put('/:id', authMiddleware, sellerOrAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { name, description, location_lat, location_lng, address, image_url, is_active, commission_rate, specializations } = req.body;
+
+        // Check ownership or admin status
+        const storeCheck = await db.query('SELECT owner_id FROM stores WHERE id = $1', [id]);
+        if (storeCheck.rows.length === 0) {
+            return res.status(404).json({ error: 'Store not found' });
+        }
+
+        if (req.user.role !== 'ADMIN' && storeCheck.rows[0].owner_id !== req.user.id) {
+            return res.status(403).json({ error: 'Not authorized to update this store' });
+        }
+
+        const result = await db.query(
+            `UPDATE stores SET 
+                name = COALESCE($1, name), 
+                description = COALESCE($2, description), 
+                location_lat = COALESCE($3, location_lat), 
+                location_lng = COALESCE($4, location_lng), 
+                address = COALESCE($5, address), 
+                image_url = COALESCE($6, image_url), 
+                is_active = COALESCE($7, is_active),
+                commission_rate = COALESCE($8, commission_rate),
+                specializations = COALESCE($9, specializations)
+            WHERE id = $10 RETURNING *`,
+            [name, description, location_lat, location_lng, address, image_url, is_active, commission_rate, specializations, id]
+        );
+
+        res.json(result.rows[0]);
+    } catch (error) {
+        console.error('Update store error:', error);
         res.status(500).json({ error: 'Server error' });
     }
 });
